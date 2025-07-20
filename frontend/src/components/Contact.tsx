@@ -15,13 +15,13 @@ const contactInfo = [
   {
     icon: Phone,
     title: "Call Us",
-    content: "+91 98765 43210",
+    content: "+91 8171268630",
     description: "Mon-Fri 9AM to 6PM"
   },
   {
     icon: MapPin,
     title: "Visit Us",
-    content: "Mumbai, India",
+    content: "Noida, India",
     description: "Schedule an appointment"
   },
   {
