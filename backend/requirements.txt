@@ -7,3 +7,5 @@ fastapi
 passlib
 jwt
 uvicorn[standard]
+pydantic[email]
+
