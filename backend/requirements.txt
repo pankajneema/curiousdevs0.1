@@ -1,11 +1,8 @@
 pymongo
-decouple
-pydantic
-typing
-datetime
+python-decouple
+pydantic[email]          
+typing-extensions        
 fastapi
-passlib
-jwt
+passlib[bcrypt]          
+PyJWT                    
 uvicorn[standard]
-pydantic[email]
-
