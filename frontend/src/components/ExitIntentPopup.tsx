@@ -207,7 +207,7 @@ export function ExitIntentPopup({ isOpen, onClose }: ExitIntentPopupProps) {
                 className="flex-1"
                 disabled={loading}
               >
-                {loading ? "Submitting..." : "Get My Free Consultation"}
+                {loading ? "Submitting..." : "Let's Connect 😊"}
               </Button>
               <Button
                 type="button"
@@ -215,7 +215,7 @@ export function ExitIntentPopup({ isOpen, onClose }: ExitIntentPopupProps) {
                 onClick={onClose}
                 className="flex-1 sm:flex-none"
               >
-                Maybe Later
+                Maybe Later 😟
               </Button>
             </div>
           </form>
