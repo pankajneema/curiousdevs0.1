@@ -1,0 +1,9 @@
+pymongo
+decouple
+pydantic
+typing
+datetime
+fastapi
+passlib
+jwt
+
