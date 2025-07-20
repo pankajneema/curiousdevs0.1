@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'https://curiousdevs0-1.onrender.com';
 
 export interface User {
   id: string;
