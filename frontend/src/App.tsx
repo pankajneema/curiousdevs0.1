@@ -8,6 +8,7 @@ import { apiClient, User } from "@/lib/api";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
+import ProjectDetail from "./pages/ProjectDetail";
 import FutureProjects from "./pages/FutureProjects";
 import NotFound from "./pages/NotFound";
 
@@ -59,6 +60,10 @@ const App = () => {
             <Route 
               path="/dashboard" 
               element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/auth" replace />} 
+            />
+            <Route 
+              path="/project/:id" 
+              element={user ? <ProjectDetail user={user} /> : <Navigate to="/auth" replace />} 
             />
             <Route 
               path="/future-projects" 

@@ -34,13 +34,14 @@ export function ContactPopup({ isOpen, onClose, user }: ContactPopupProps) {
   try {
     if (user) {
       // Logged-in user → Save to projects
-      const project = await apiClient.createProject({
+      const response = await apiClient.createProject({
         title: formData.title,
         service_type: formData.serviceType,
         description: formData.description
       });
 
-      const projectSummary = `Hi, I am ${user.full_name}
+      if (response.status === "success") {
+        const projectSummary = `Hi, I am ${user.full_name}
             
       📋 Project Details:
       • Title: ${formData.title}
@@ -49,29 +50,30 @@ export function ContactPopup({ isOpen, onClose, user }: ContactPopupProps) {
       • Customer: ${user.full_name}
       • Phone: ${user.phone}
       • Location: ${user.location}
-      • Status: Request Send
+      • Status: Pending
 
       Looking forward to working with you!`;
 
-      toast({
-        title: "Project Request Submitted Successfully! 🎉",
-        description: (
-          <div className="mt-2">
-            <p className="mb-2">Your project has been submitted with initial status "Request Send"</p>
-            <Button
-              size="sm"
-              onClick={() => {
-                const whatsappUrl = `https://wa.me/918171268630?text=${encodeURIComponent(projectSummary)}`;
-                window.open(whatsappUrl, '_blank');
-              }}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <Phone className="w-4 h-4 mr-2" />
-              Send to WhatsApp
-            </Button>
-          </div>
-        ),
-      });
+        toast({
+          title: "Project Request Submitted Successfully! 🎉",
+          description: (
+            <div className="mt-2">
+              <p className="mb-2">Your project has been submitted with initial status "Pending"</p>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const whatsappUrl = `https://wa.me/918171268630?text=${encodeURIComponent(projectSummary)}`;
+                  window.open(whatsappUrl, '_blank');
+                }}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Phone className="w-4 h-4 mr-2" />
+                Send to WhatsApp
+              </Button>
+            </div>
+          ),
+        });
+      }
     } else {
       // Guest user → Create lead
      const pnkj  =  await apiClient.leadCreate(

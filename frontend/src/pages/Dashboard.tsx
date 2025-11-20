@@ -16,11 +16,15 @@ import {
   TrendingUp,
   Users,
   FileText,
-  Phone
+  Phone,
+  Eye,
+  MessageSquare
 } from "lucide-react";
-import { apiClient, User, Project, ContactRequest } from "@/lib/api";
+import { useNavigate } from "react-router-dom";
+import { apiClient, User, Project, ContactRequest, Bill } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { ContactPopup } from "@/components/ContactPopup";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface DashboardProps {
   user: User;
@@ -28,10 +32,13 @@ interface DashboardProps {
 }
 
 const Dashboard = ({ user, onLogout }: DashboardProps) => {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [contactRequests, setContactRequests] = useState<ContactRequest[]>([]);
+  const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [showContactPopup, setShowContactPopup] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -42,26 +49,37 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     setLoading(true);
     try {
       if (user.role === 'admin') {
-        // Fetch all projects and contacts for admin
-        const [projectsData, contactsData] = await Promise.all([
-          apiClient.getProjects(),
-          apiClient.getContactRequests()
-        ]);
+        // Fetch all projects for admin
+        const projectsData = await apiClient.getProjects();
+        setProjects(projectsData || []);
         
-        setProjects(projectsData);
-        setContactRequests(contactsData);
+        // Try to fetch contacts, but don't fail if endpoint doesn't exist
+        try {
+          const contactsData = await apiClient.getContactRequests();
+          setContactRequests(contactsData || []);
+        } catch (err) {
+          console.log('Contact requests endpoint not available');
+          setContactRequests([]);
+        }
       } else {
         // Fetch only user's projects for customer
-        const projectsData = await apiClient.getProjects();
-        setProjects(projectsData);
+        const [projectsData, billsData] = await Promise.all([
+          apiClient.getProjects(),
+          apiClient.getMyBills().catch(() => [])
+        ]);
+        setProjects(projectsData || []);
+        setBills(billsData || []);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching data:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch data",
+        description: error?.message || "Failed to fetch data. Please check your connection.",
         variant: "destructive",
       });
+      // Set empty arrays on error so page still renders
+      setProjects([]);
+      setContactRequests([]);
     } finally {
       setLoading(false);
     }
@@ -77,14 +95,35 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     }
   };
 
-  const getStatusProgress = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'request send': return 25;
+  const getStatusProgress = (project: Project) => {
+    if (project.progress_percentage !== undefined) {
+      return project.progress_percentage;
+    }
+    switch (project.status?.toLowerCase()) {
+      case 'request send':
       case 'pending': return 25;
-      case 'in_progress': return 60;
+      case 'in_progress':
+      case 'ongoing':
+      case 'accepted': return 60;
       case 'completed': return 100;
       default: return 0;
     }
+  };
+
+  const filteredProjects = projects.filter((project) => {
+    if (statusFilter === "all") return true;
+    return project.status?.toLowerCase() === statusFilter.toLowerCase();
+  });
+
+  const projectStats = {
+    total: projects.length,
+    pending: projects.filter((p) => p.status?.toLowerCase() === "pending").length,
+    accepted: projects.filter((p) => p.status?.toLowerCase() === "accepted").length,
+    ongoing: projects.filter((p) => 
+      p.status?.toLowerCase() === "in_progress" || 
+      p.status?.toLowerCase() === "ongoing"
+    ).length,
+    completed: projects.filter((p) => p.status?.toLowerCase() === "completed").length,
   };
 
   if (loading) {
@@ -197,7 +236,7 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Revenue</p>
                       <p className="text-3xl font-bold text-foreground">
-                        ₹{projects.reduce((sum, p) => sum + (p.total_amount || 0), 0).toLocaleString()}
+                        ₹{projects.reduce((sum, p) => sum + (p.project_amount || 0), 0).toLocaleString()}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         <IndianRupee className="w-3 h-3 inline mr-1" />
@@ -222,26 +261,99 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 <CardDescription>Manage all customer projects</CardDescription>
               </CardHeader>
               <CardContent>
+                {/* Status Filter */}
+                <div className="flex gap-2 mb-4 flex-wrap">
+                  <Button
+                    variant={statusFilter === "all" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFilter("all")}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    variant={statusFilter === "pending" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFilter("pending")}
+                  >
+                    Pending
+                  </Button>
+                  <Button
+                    variant={statusFilter === "accepted" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFilter("accepted")}
+                  >
+                    Accepted
+                  </Button>
+                  <Button
+                    variant={statusFilter === "ongoing" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFilter("ongoing")}
+                  >
+                    Ongoing
+                  </Button>
+                  <Button
+                    variant={statusFilter === "completed" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFilter("completed")}
+                  >
+                    Completed
+                  </Button>
+                </div>
+
                 <div className="space-y-4">
-                  {projects.map((project) => (
-                    <div key={project.id} className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-medium text-foreground">{project.title}</h3>
-                          <Badge variant={getStatusColor(project.status)}>
-                            {project.status}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-2">{project.description}</p>
-                        <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                          <span>Type: {project.service_type}</span>
-                          <span>Amount: ₹{project.total_amount?.toLocaleString() || 0}</span>
-                          <span>Created: {new Date(project.created_at).toLocaleDateString()}</span>
-                        </div>
-                        <Progress value={getStatusProgress(project.status)} className="mt-2" />
-                      </div>
+                  {filteredProjects.length === 0 ? (
+                    <div className="text-center py-12">
+                      <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No projects found</p>
                     </div>
-                  ))}
+                  ) : (
+                    filteredProjects.map((project) => (
+                      <div key={project.id} className="p-4 bg-secondary/30 rounded-lg hover:bg-secondary/50 transition-colors">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-medium text-foreground text-lg">{project.title}</h3>
+                              <div className="flex gap-2">
+                                <Badge variant={getStatusColor(project.status || "")}>
+                                  {project.status}
+                                </Badge>
+                                {project.payment_status === "paid" && (
+                                  <Badge variant="default">Paid</Badge>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                              {project.description}
+                            </p>
+                            <div className="flex items-center space-x-4 text-xs text-muted-foreground mb-3">
+                              <span>Type: {project.service_type?.replace("_", " ") || "N/A"}</span>
+                              <span>Created: {new Date(project.created_at).toLocaleDateString()}</span>
+                              <span>Progress: {getStatusProgress(project)}%</span>
+                            </div>
+                            <Progress value={getStatusProgress(project)} className="mb-3" />
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate(`/project/${project.id}`)}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Details
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate(`/project/${project.id}`, { state: { tab: "messages" } })}
+                              >
+                                <MessageSquare className="h-4 w-4 mr-2" />
+                                Message
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -273,9 +385,9 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Total Amount</p>
+                      <p className="text-sm font-medium text-muted-foreground">Total Project Amount</p>
                       <p className="text-3xl font-bold text-foreground">
-                        ₹{projects.reduce((sum, p) => sum + (p.total_amount || 0), 0).toLocaleString()}
+                        ₹{projects.reduce((sum, p) => sum + (p.project_amount || 0), 0).toLocaleString()}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         <IndianRupee className="w-3 h-3 inline mr-1" />
@@ -284,6 +396,30 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                     </div>
                     <div className="bg-green-500/10 p-3 rounded-lg">
                       <IndianRupee className="h-8 w-8 text-green-500" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border shadow-soft hover:shadow-large transition-shadow duration-300">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Pending Payment</p>
+                      <p className="text-3xl font-bold text-foreground">
+                        ₹{projects.reduce((sum, p) => {
+                          const amount = p.project_amount || 0;
+                          const paid = p.paid_amount || 0;
+                          return sum + (amount - paid);
+                        }, 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        <AlertCircle className="w-3 h-3 inline mr-1" />
+                        Remaining payment
+                      </p>
+                    </div>
+                    <div className="bg-orange-500/10 p-3 rounded-lg">
+                      <AlertCircle className="h-8 w-8 text-orange-500" />
                     </div>
                   </div>
                 </CardContent>
@@ -310,6 +446,37 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               </Card>
             </div>
 
+            {/* Project Stats */}
+            <Card className="border-border shadow-soft">
+              <CardHeader>
+                <CardTitle>Project Statistics</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-foreground">{projectStats.total}</p>
+                    <p className="text-sm text-muted-foreground">Total</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-foreground">{projectStats.pending}</p>
+                    <p className="text-sm text-muted-foreground">Pending</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-foreground">{projectStats.accepted}</p>
+                    <p className="text-sm text-muted-foreground">Accepted</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-foreground">{projectStats.ongoing}</p>
+                    <p className="text-sm text-muted-foreground">Ongoing</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-foreground">{projectStats.completed}</p>
+                    <p className="text-sm text-muted-foreground">Completed</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Customer Projects */}
             <Card className="border-border shadow-soft">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -329,40 +496,125 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                 </Button>
               </CardHeader>
               <CardContent>
-                {projects.length === 0 ? (
+                {/* Status Filter */}
+                <div className="flex gap-2 mb-4 flex-wrap">
+                  <Button
+                    variant={statusFilter === "all" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFilter("all")}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    variant={statusFilter === "pending" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFilter("pending")}
+                  >
+                    Pending
+                  </Button>
+                  <Button
+                    variant={statusFilter === "accepted" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFilter("accepted")}
+                  >
+                    Accepted
+                  </Button>
+                  <Button
+                    variant={statusFilter === "ongoing" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFilter("ongoing")}
+                  >
+                    Ongoing
+                  </Button>
+                  <Button
+                    variant={statusFilter === "completed" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFilter("completed")}
+                  >
+                    Completed
+                  </Button>
+                </div>
+
+                {filteredProjects.length === 0 ? (
                   <div className="text-center py-12">
                     <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-foreground mb-2">No projects yet</h3>
-                    <p className="text-muted-foreground mb-6">Request your first project to get started!</p>
-                    <Button 
-                      onClick={() => setShowContactPopup(true)}
-                      className="shadow-md hover:shadow-lg transition-shadow"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Request Project
-                    </Button>
+                    <h3 className="text-lg font-medium text-foreground mb-2">
+                      {projects.length === 0 ? "No projects yet" : "No projects with this status"}
+                    </h3>
+                    <p className="text-muted-foreground mb-6">
+                      {projects.length === 0 
+                        ? "Request your first project to get started!"
+                        : "Try selecting a different status filter"}
+                    </p>
+                    {projects.length === 0 && (
+                      <Button 
+                        onClick={() => setShowContactPopup(true)}
+                        className="shadow-md hover:shadow-lg transition-shadow"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Request Project
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {projects.map((project) => (
-                      <div key={project.id} className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-medium text-foreground">{project.title}</h3>
-                            <Badge variant={getStatusColor(project.status)}>
-                              {project.status}
-                            </Badge>
+                    {filteredProjects.map((project) => (
+                      <div key={project.id} className="p-4 bg-secondary/30 rounded-lg hover:bg-secondary/50 transition-colors">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-medium text-foreground text-lg">{project.title}</h3>
+                              <div className="flex gap-2">
+                                <Badge variant={getStatusColor(project.status || "")}>
+                                  {project.status}
+                                </Badge>
+                                {project.payment_status === "paid" && (
+                                  <Badge variant="default">Paid</Badge>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                              {project.description}
+                            </p>
+                            <div className="flex items-center space-x-4 text-xs text-muted-foreground mb-3">
+                              <span>Type: {project.service_type?.replace("_", " ") || "N/A"}</span>
+                              <span>Created: {new Date(project.created_at).toLocaleDateString()}</span>
+                              {project.project_amount && project.project_amount > 0 && (
+                                <>
+                                  <span className="font-semibold text-foreground">
+                                    Amount: ₹{project.project_amount.toLocaleString()}
+                                  </span>
+                                  {project.paid_amount !== undefined && (
+                                    <span className={project.paid_amount < project.project_amount ? "text-orange-500" : "text-green-500"}>
+                                      Paid: ₹{project.paid_amount.toLocaleString()}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                            <Progress value={getStatusProgress(project)} className="mb-2" />
+                            <p className="text-xs text-muted-foreground mb-3">
+                              Progress: {getStatusProgress(project)}%
+                            </p>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate(`/project/${project.id}`)}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Details
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate(`/project/${project.id}`, { state: { tab: "messages" } })}
+                              >
+                                <MessageSquare className="h-4 w-4 mr-2" />
+                                Message
+                              </Button>
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground mb-2">{project.description}</p>
-                          <div className="flex items-center space-x-4 text-xs text-muted-foreground mb-2">
-                            <span>Type: {project.service_type}</span>
-                            <span>Amount: ₹{project.total_amount?.toLocaleString() || 0}</span>
-                            <span>Created: {new Date(project.created_at).toLocaleDateString()}</span>
-                          </div>
-                          <Progress value={getStatusProgress(project.status)} className="mb-2" />
-                          <p className="text-xs text-muted-foreground">
-                            Progress: {getStatusProgress(project.status)}%
-                          </p>
                         </div>
                       </div>
                     ))}
@@ -371,33 +623,114 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
               </CardContent>
             </Card>
 
-            {/* Profile Card */}
+            {/* Profile Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Profile Information */}
+              <Card className="border-border shadow-soft">
+                <CardHeader>
+                  <CardTitle className="text-foreground flex items-center">
+                    <UserIcon className="w-5 h-5 mr-2" />
+                    Profile Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Full Name</Label>
+                      <p className="text-foreground">{user.full_name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Email</Label>
+                      <p className="text-foreground">{user.email}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Phone</Label>
+                      <p className="text-foreground">{user.phone}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Location</Label>
+                      <p className="text-foreground">{user.location}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Curious Points & Billing */}
+              <Card className="border-border shadow-soft">
+                <CardHeader>
+                  <CardTitle className="text-foreground flex items-center">
+                    <TrendingUp className="w-5 h-5 mr-2" />
+                    Curious Points & Billing
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {/* Curious Points */}
+                    <div className="p-4 bg-gradient-primary/10 rounded-lg border border-primary/20">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Curious Points</p>
+                          <p className="text-2xl font-bold text-primary mt-1">
+                            {projects.length * 100}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Earned from projects
+                          </p>
+                        </div>
+                        <div className="bg-primary/20 p-3 rounded-lg">
+                          <TrendingUp className="h-8 w-8 text-primary" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Billing Summary */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold">Billing Summary</Label>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total Projects:</span>
+                          <span className="font-medium">{projects.length}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total Amount:</span>
+                          <span className="font-medium">
+                            ₹{projects.reduce((sum, p) => sum + (p.project_amount || 0), 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Paid Amount:</span>
+                          <span className="font-medium text-green-500">
+                            ₹{projects.reduce((sum, p) => sum + (p.paid_amount || 0), 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-t pt-2">
+                          <span className="text-muted-foreground">Pending:</span>
+                          <span className="font-medium text-orange-500">
+                            ₹{projects.reduce((sum, p) => {
+                              const amount = p.project_amount || 0;
+                              const paid = p.paid_amount || 0;
+                              return sum + (amount - paid);
+                            }, 0).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Billing History */}
             <Card className="border-border shadow-soft">
               <CardHeader>
                 <CardTitle className="text-foreground flex items-center">
-                  <UserIcon className="w-5 h-5 mr-2" />
-                  Profile Information
+                  <FileText className="w-5 h-5 mr-2" />
+                  Billing History
                 </CardTitle>
+                <CardDescription>Your payment history for all projects</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Full Name</Label>
-                    <p className="text-foreground">{user.full_name}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Email</Label>
-                    <p className="text-foreground">{user.email}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Phone</Label>
-                    <p className="text-foreground">{user.phone}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Location</Label>
-                    <p className="text-foreground">{user.location}</p>
-                  </div>
-                </div>
+                <BillingHistory user={user} projects={projects} />
               </CardContent>
             </Card>
           </div>
@@ -409,6 +742,81 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
         onClose={() => setShowContactPopup(false)} 
         user={user}
       />
+    </div>
+  );
+};
+
+// Billing History Component
+const BillingHistory = ({ user, projects }: { user: User; projects: Project[] }) => {
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchBills = async () => {
+      try {
+        const billsData = await apiClient.getMyBills();
+        setBills(billsData || []);
+      } catch (error) {
+        console.error("Failed to fetch bills:", error);
+        setBills([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBills();
+  }, []);
+
+  // Combine bills with project info
+  const billingData = bills.map(bill => {
+    const project = projects.find(p => p.id === bill.project_id);
+    return {
+      ...bill,
+      project_title: project?.title || "Unknown Project",
+      project_amount: project?.project_amount || bill.amount
+    };
+  });
+
+  if (loading) {
+    return <p className="text-muted-foreground">Loading billing history...</p>;
+  }
+
+  if (billingData.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
+        <p className="text-muted-foreground">No billing history yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Project</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {billingData.map((bill) => (
+            <TableRow key={bill.id}>
+              <TableCell>
+                {new Date(bill.issued_on).toLocaleDateString()}
+              </TableCell>
+              <TableCell className="font-medium">{bill.project_title}</TableCell>
+              <TableCell>₹{bill.amount.toLocaleString()}</TableCell>
+              <TableCell>
+                <Badge variant={bill.status === "paid" ? "default" : "outline"}>
+                  {bill.status}
+                </Badge>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 };

@@ -39,14 +39,19 @@ const handleLogin = async (e: React.FormEvent) => {
 
   try {
     const response = await apiClient.login(loginData.email, loginData.password);
-    console.log("PANKAJAAAAA",response);
 
     if (response.status !== "success") {
       throw new Error(response.message || "Login failed");
     }
 
-    setUser(response.token);
-    localStorage.setItem("token", JSON.stringify(response.token));
+    // Store token and user properly
+    if (response.token) {
+      localStorage.setItem("token", response.token);
+    }
+    
+    if (response.user) {
+      setUser(response.user);
+    }
 
     toast({
       title: "Success!",
