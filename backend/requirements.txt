@@ -1,8 +1,8 @@
 pymongo
 python-decouple
-pydantic[email]          
-typing-extensions        
+pydantic[email]
+typing-extensions
 fastapi
-passlib[bcrypt]          
-PyJWT                    
+passlib
+PyJWT
 uvicorn[standard]
