@@ -15,7 +15,7 @@ const getApiBaseUrl = () => {
   return 'http://localhost:5000';
 };
 
-const API_BASE_URL =   'https://curiousdevs0-1.onrender.com' //getApiBaseUrl();
+const API_BASE_URL =   'https://curiousdev-one.vercel.app' //getApiBaseUrl();
 console.log('API Base URL:', API_BASE_URL);
 
 export interface User {
