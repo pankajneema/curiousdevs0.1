@@ -8,9 +8,9 @@ import { apiClient, User } from "@/lib/api";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
-import ProjectDetail from "./pages/ProjectDetail";
 import FutureProjects from "./pages/FutureProjects";
 import NotFound from "./pages/NotFound";
+import ProjectDetail from "./pages/ProjectDetail";
 
 const queryClient = new QueryClient();
 
